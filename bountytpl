@@ -108,7 +108,7 @@ help)
     echo "bountytpl v${_version}"
     echo ''
     doc 'help' 'this list of help'
-    doc 'version' 'show version of bountyplz'
+    doc 'version' 'show version'
     echo ''
     doc 'usage: bountytpl <tpl> [-v] [-f <json-file> | <json-data>] [-o <output-file>]'
     echo ''
