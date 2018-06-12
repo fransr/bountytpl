@@ -1,0 +1,126 @@
+#!/bin/bash
+
+set -euo pipefail
+
+die () {
+    echo >&2 "$@"
+    exit 1
+}
+
+which jq > /dev/null || die 'error: you need jq'
+
+_sed_bin=$(which gsed || which sed)
+[ "${_sed_bin}" != "" ] || die 'error: you need sed'
+
+_version="1.0"
+_command="${1-help}"
+
+init () {
+    _validate_only=""
+    _report_file=""
+    _vars_file=""
+    _vars=""
+    _output_file=""
+    report_args "$@"
+}
+
+report_args () {
+    while [ $# -gt 0 ]; do
+        case "$1" in
+        --validate|-v)
+            _validate_only="1"
+        ;;
+        --file|-f)
+            _vars_file="${2:-}"
+            shift
+        ;;
+        --output|-o)
+            _output_file="${2:-}"
+            shift
+        ;;
+        *)
+            if [ "${_report_file}" == "" ]; then
+                _report_file="${1:-}"
+            else
+                if [ "${_vars}" == "" ] && [ "${_vars_file}" == "" ]; then
+                    _vars="${1:-}"
+                    _valid=$(echo "${_vars}" | jq -c '.' 2>/dev/null || echo "")
+                    if [ "${_valid}" == "" ]; then
+                        doc_error "invalid variables"
+                    fi
+                else
+                    doc_error "too many parameters"
+                fi
+            fi
+        ;;
+        esac
+        shift
+    done
+    [ "${_vars_file}" != "" ] && [ ! -f "${_vars_file}" ] && doc_error "json-file not found"
+    [ "${_vars_file}" != "" ] && _vars=$(cat "${_vars_file}")
+    [ "${_report_file}" != "" ] || doc_error "report file not found"
+    [ "${_vars}" != "" ] || doc_error "variables not found"
+}
+
+report_parse () {
+
+    [ ! -f "${1}" ] && doc_error "report file not found: ${1}"
+
+    _report=$(cat "${1}")
+
+    _found=1
+    _key=1
+    _error=0
+
+    while [ "${_found}" != "" ]; do
+        _found=$(echo "${_report}" | grep -m1 -Eo "{{[a-zA-Z0-9_-]+}}" | head -n 1 || echo "")
+        [ "${_found}" == "" ] && break;
+
+        _find=$(echo "${_found}" | cut -c 3- | rev | cut -c 3- | rev)
+        _exists=$(echo "${_vars}" | jq -r --arg find "${_find}" 'has($find)')
+        [ "${_exists}" == "false" ] && _error=1 && doc_error_notice "${_find} not found in variables"
+
+        _replace=$(echo "${_vars}" | jq -r --arg find "${_find}" '.[$find]')
+        _replace=$(echo "$_replace" | ${_sed_bin} -E ':a;N;$!ba;s/\r{0,1}\n/\\n/g')
+        _report=$(echo "${_report}" | ${_sed_bin} -r -e "0,/\{\{[a-zA-Z0-9_-]+\}\}/ s//${_replace}/");
+        _key=$(($_key + 1))
+    done
+
+    [ ${_error} -eq 1 ] && die;
+
+    [ "${_validate_only}" ] && exit 0;
+
+    [ "${_output_file}" != "" ] && echo "${_report}" > "${_output_file}" && exit 0;
+
+    echo "${_report}"
+}
+
+doc () { printf '%-30s \e[38;5;22m%s\e[m\n' "${1:-}" "${2:-}"; }
+doc_error_notice() { printf '\033[31m### %s\e[0m\n' "${1}"; }
+doc_error() { printf '\033[31m### %s\e[0m\n' "${1}"; die; }
+
+case ${_command} in
+version)
+    echo "v${_version}"
+;;
+help)
+    echo ''
+    echo "bountytpl v${_version}"
+    echo ''
+    doc 'help' 'this list of help'
+    doc 'version' 'show version of bountyplz'
+    echo ''
+    doc 'usage: bountytpl <tpl> [-v] [-f <json-file> | <json-data>] [-o <output-file>]'
+    echo ''
+    doc '<tpl> <json-data>' 'variables from a JSON-string'
+    doc '<tpl> -f <json-file>' 'variables from a JSON-file'
+    doc '<tpl> -v <json-data>' 'validate only, returns exit 0 on success'
+    doc '-o <output-file>' 'result will be saved to the file with variables replaced'
+    echo ''
+    echo ''
+;;
+*)
+    init "$@"
+    report_parse "${_report_file}"
+;;
+esac

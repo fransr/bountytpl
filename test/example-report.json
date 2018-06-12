@@ -1,0 +1,6 @@
+{
+	"asset":"*.example.com",
+	"domain":"mail.example.com",
+	"lookup":"$ host xxx\nexample.example aaa.s3.amazonaws.com",
+	"poc-before":"<img upload src=\u0022a.png\u0022>"
+}
