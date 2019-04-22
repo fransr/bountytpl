@@ -68,7 +68,6 @@ report_parse () {
 
     _report=$(cat "${1}")
 
-
     _found=1
     _key=1
     _error=0
