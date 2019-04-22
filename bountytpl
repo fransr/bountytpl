@@ -68,6 +68,7 @@ report_parse () {
 
     _report=$(cat "${1}")
 
+
     _found=1
     _key=1
     _error=0
@@ -76,7 +77,12 @@ report_parse () {
         _found=$(echo "${_report}" | grep -m1 -Eo "{{[a-zA-Z0-9_-]+}}" | head -n 1 || echo "")
         [ "${_found}" == "" ] && break;
 
-        _find=$(echo "${_found}" | cut -c 3- | rev | cut -c 3- | rev)
+        if [ "$(uname)" == "Darwin" ]; then
+            _find=$(echo "${_found}" | cut -c 3- | rev | cut -c 3- | rev)
+        else
+            _find=$(echo "${_found}" | rev | cut -c 3- | rev)
+        fi
+
         _exists=$(echo "${_vars}" | jq -r --arg find "${_find}" 'has($find)')
         [ "${_exists}" == "false" ] && _error=1 && doc_error_notice "${_find} not found in variables"
 
